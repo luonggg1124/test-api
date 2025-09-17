@@ -14,6 +14,7 @@ export default function Home() {
   const [bodyText, setBodyText] = useState<string>("{}");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [apiError, setApiError] = useState<string>("");
 
   const isBodyAllowed = useMemo(() => {
     return !(method === "GET" || method === "HEAD");
@@ -21,6 +22,7 @@ export default function Home() {
 
   const handleCall = useCallback(async () => {
     setError("");
+    setApiError("");
     if (!url.trim()) {
       setError("Vui lòng nhập URL");
       return;
@@ -64,21 +66,27 @@ export default function Home() {
       });
 
       const contentType = res.headers.get("content-type") || "";
-      let data: unknown;
-      if (contentType.includes("application/json")) {
-        data = await res.json();
-      } else if (contentType.includes("text/")) {
-        data = await res.text();
-      } else {
-        data = await res.arrayBuffer();
+      let parsedBody: unknown = null;
+      try {
+        if (contentType.includes("application/json")) {
+          parsedBody = await res.json();
+        } else if (contentType.includes("text/")) {
+          parsedBody = await res.text();
+        } else {
+          parsedBody = await res.arrayBuffer();
+        }
+      } catch (_) {
+        // ignore body parse errors
       }
-      // Log kết quả ra console như yêu cầu
-      // eslint-disable-next-line no-console
-      console.log("API response:", data);
+
+      if (!res.ok) {
+        const bodyText = typeof parsedBody === "string" ? parsedBody : JSON.stringify(parsedBody, null, 2);
+        setApiError(`HTTP ${res.status} ${res.statusText}\n\n${bodyText || ""}`.trim());
+        return;
+      }
+      setApiError("");
     } catch (err: unknown) {
-      setError((err as Error)?.message || "Đã xảy ra lỗi");
-      // eslint-disable-next-line no-console
-      console.error(err);
+      setApiError((err as Error)?.message || "Đã xảy ra lỗi");
     } finally {
       setIsLoading(false);
     }
@@ -151,6 +159,10 @@ export default function Home() {
 
           {error && (
             <div className="text-red-600 text-sm">{error}</div>
+          )}
+
+          {apiError && (
+            <pre className="whitespace-pre-wrap break-words border border-red-300 bg-red-50 text-red-700 rounded p-3 text-sm">{apiError}</pre>
           )}
 
           <div className="text-xs text-zinc-600 dark:text-zinc-400">
